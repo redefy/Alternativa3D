@@ -131,7 +131,10 @@ package alternativa.engine3d.core {
 
 		/** Флаг, определяющий могут на этот объект воздействовать источники света или нет. @private */ 
 		public var useShadow:Boolean = true;
-
+		
+		/** @private */
+		alternativa3d var excludedLights:Vector.<Light3D> = new Vector.<Light3D>();
+		
 		/** 
 		 * Матрица трансформации, для внутреннего использования, использующаяся в некоторых методах для 
 		 * хранения временных значений.
@@ -213,6 +216,10 @@ package alternativa.engine3d.core {
 		alternativa3d var localToGlobalTransform:Transform3D = new Transform3D();
 		/** Матрица для конвертирования координат коллайдера в локальные координаты объекта. @private */
 		alternativa3d var globalToLocalTransform:Transform3D = new Transform3D();
+		/** @private */
+		alternativa3d var localToLightTransform:Transform3D = new Transform3D();
+		/** @private */
+		alternativa3d var lightToLocalTransform:Transform3D = new Transform3D();
 		/** Свойство содержит результат проверки пересечения баундбокса объекта с фрустумом камеры. @private */
 		alternativa3d var culling:int;
 		/** Свойство содержит результат проверки пересечения объекта с лучами-событиями мыши. @private */
@@ -1456,7 +1463,7 @@ package alternativa.engine3d.core {
 		 * @param	lightsLength	количество источников света.
 		 * @private
 		 */
-		alternativa3d function collectDraws(camera:Camera3D, lights:Vector.<Light3D>, lightsLength:int):void {}
+		alternativa3d function collectDraws(camera:Camera3D, lights:Vector.<Light3D>, lightsLength:int, useShadow:Boolean):void {}
 
 		/**
 		 * Собирает ресурсы необходимые для рендеринга детей текущего объекта. 
@@ -1465,9 +1472,10 @@ package alternativa.engine3d.core {
 		 * @param	lightsLength	количество источников света.
 		 * @private
 		 */
-		alternativa3d function collectChildrenDraws(camera:Camera3D, lights:Vector.<Light3D>, lightsLength:int):void {
+		alternativa3d function collectChildrenDraws(camera:Camera3D, lights:Vector.<Light3D>, lightsLength:int, useShadow:Boolean):void {
 			var i:int;
 			var light:Light3D;
+			var excludedLightLength:int = excludedLights.length;
 			//пробегаемся по списку детей текущего объекта
 			for (var child:Object3D = childrenList; child != null; child = child.next) {
 				//если объект видимый, то продолжаем обрабатывать его.
@@ -1488,10 +1496,16 @@ package alternativa.engine3d.core {
 						}
 						// если на объект должны воздействовать источники света
 						if (lightsLength > 0 && child.useLights) {
+							var childLightsLength:int = 0;
+							var j:int;
 							if (child.boundBox != null) {
-								var childLightsLength:int = 0;
 								for (i = 0; i < lightsLength; i++) {
 									light = lights[i];
+									// Checking object for existing in excludedLights
+									j = 0;
+									while (j<excludedLightLength && excludedLights[j]!=light)  j++;	
+									if (j < excludedLightLength) continue;
+									
 									// вычисляем матрицу для конвертирования координат из пространства источника света
 									// в пространство объекта child
 									light.lightToObjectTransform.combine(child.cameraToLocalTransform, light.localToCameraTransform);
@@ -1501,24 +1515,29 @@ package alternativa.engine3d.core {
 										childLightsLength++;
 									}
 								}
-								child.collectDraws(camera, camera.childLights, childLightsLength);
 							} else {
 								// вычисляем матрицу для конвертирования координат из пространства источника света
 								// в пространство объекта child
 								for (i = 0; i < lightsLength; i++) {
 									light = lights[i];
+									// Проверка источника света на отсутствие в excludedLights
+									j = 0;
+									while (j<excludedLightLength && excludedLights[j]!=light)  j++;
+									if (j<excludedLightLength) continue;
 									light.lightToObjectTransform.combine(child.cameraToLocalTransform, light.localToCameraTransform);
+									camera.childLights[childLightsLength] = light;
+									childLightsLength++;
 								}
-								child.collectDraws(camera, lights, lightsLength);
 							}
+							child.collectDraws(camera, camera.childLights, childLightsLength, useShadow&&child.useShadow);
 						} else {
-							child.collectDraws(camera, null, 0);
+							child.collectDraws(camera, null, 0, useShadow&&child.useShadow);
 						}
 						// если включен дебаг режим камеры, и включена отрисовка баундбоксов, то рисуем баундбокс объекта child (объект Wireframe) 
 						if (camera.debug && child.boundBox != null && (camera.checkInDebug(child) & Debug.BOUNDS)) Debug.drawBoundBox(camera, child.boundBox, child.localToCameraTransform);
 					}
 					// собираем ресуры у детей текущего объекта
-					if (child.childrenList != null) child.collectChildrenDraws(camera, lights, lightsLength);
+					if (child.childrenList != null) child.collectChildrenDraws(camera, lights, lightsLength, useShadow && child.useShadow);
 				}
 			}
 		}
@@ -1571,7 +1590,17 @@ package alternativa.engine3d.core {
 
 		/** @private */
 		alternativa3d function setTransformConstants(drawUnit:DrawUnit, surface:Surface, vertexShader:Linker, camera:Camera3D):void {}
-
+		
+	    /** Toggle off light source from litting this object */
+		public function excludeLight(light:Light3D):void{
+			excludedLights.push(light);
+		}
+ 		
+		/** Resets list of lights excluded from litting this object */	
+		public function resetLights():void{
+			excludedLights.length = 0;	
+		}
+		
 		/**
 		 * Возвращает копию объекта.
 		 * @return копия объекта.

@@ -41,9 +41,9 @@ package alternativa.engine3d.lights {
 			var dx:Number = x - this.x;
 			var dy:Number = y - this.y;
 			var dz:Number = z - this.z;
-			rotationX = Math.atan2(dz, Math.sqrt(dx*dx + dy*dy)) - Math.PI/2;
-			rotationY = 0;
-			rotationZ = -Math.atan2(dx, dy);
+			_rotationX = Math.atan2(dz, Math.sqrt(dx*dx + dy*dy)) - Math.PI/2;
+			_rotationY = 0;
+			_rotationZ = -Math.atan2(dx, dy);
 		}
 		
 		/**
